@@ -1,0 +1,57 @@
+# Node modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Build and cache
+dist/
+build/
+.cache/
+.temp/
+.tmp/
+coverage/
+logs/
+*.log
+
+# Puppeteer cache
+~/.cache/puppeteer/
+puppeteer_cache/
+chrome_profile/
+.chromium/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDEs / Editors
+.vscode/
+.idea/
+*.swp
+
+# Database dumps or local data
+*.sql
+*.sqlite
+data/
+backup/
+
+# Uploaded files
+uploads/
+storage/
+public/uploads/
+
+# Optional: macOS
+.AppleDouble
+.LSOverride
+Icon
+
+# Optional: test output
+jest-html-reporters-*
+coverage-final.json
