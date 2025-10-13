@@ -5,8 +5,7 @@ const router = express.Router();
 
 router.post("/scrape", async (req, res) => {
   try {
-    const clientData = req.body;
-    const vehicles = await scrapeAutoScout(clientData);
+    const vehicles = await scrapeAutoScout(req.body);
     res.json(vehicles);
   } catch (error) {
     console.error("Erreur dans /scrape:", error.message);
