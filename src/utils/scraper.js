@@ -1,12 +1,41 @@
 import puppeteer from "puppeteer";
 
 export const scrapeAutoScout = async (clientData) => {
-  const { marque, modele, budget, maxKm, puissance_min } = clientData;
+  let { marque, modele, budget, maxKm, puissance_min, boite } = clientData;
 
+  // ✅ Nettoyage du texte reçu
+  const normalizedBoite = (boite || "").trim().toLowerCase();
+
+  // ✅ Conversion en code attendu par AutoScout24
+  let gearParam = "";
+  if (normalizedBoite.includes("auto")) gearParam = "A";
+  else if (normalizedBoite.includes("man")) gearParam = "M";
+
+  // ✅ Construction dynamique du chemin et des query params
   const searchPath = `${marque.toLowerCase()}/${encodeURIComponent(modele.toLowerCase())}`;
-  const url = `https://www.autoscout24.fr/lst/${searchPath}/pr_${budget || 20000}?atype=C&cy=F&damaged_listing=exclude&desc=0&kmto=${maxKm || 120000}&powerfrom=${puissance_min || ''}&powertype=kw&ustate=N%2CU`;
+  const baseUrl = `https://www.autoscout24.fr/lst/${searchPath}`;
+
+  const params = new URLSearchParams({
+    atype: "C",
+    cy: "F",
+    damaged_listing: "exclude",
+    desc: "0",
+    sort: "standard",
+    ustate: "N,U",
+    powertype: "kw",
+    kmto: maxKm || 120000,
+    priceto: budget || 20000,
+  });
+
+  // ✅ On ajoute gear uniquement si défini
+  if (gearParam !== "") params.append("gear", gearParam);
+
+  if (puissance_min) params.append("powerfrom", puissance_min);
+
+  const url = `${baseUrl}?${params.toString()}`;
 
   console.log("🌐 URL générée :", url);
+  console.log("⚙️ Paramètres :", { marque, modele, budget, maxKm, puissance_min, boite, gearParam });
 
   let browser;
   try {
@@ -20,7 +49,6 @@ export const scrapeAutoScout = async (clientData) => {
     console.log("✅ Page chargée, défilement pour charger les images...");
 
     await autoScroll(page);
-
     console.log("📸 Scroll terminé, extraction des annonces...");
 
     const vehicles = await page.evaluate(() => {
@@ -43,16 +71,12 @@ export const scrapeAutoScout = async (clientData) => {
           }
           return "https://via.placeholder.com/250x188?text=No+Image";
         })(),
-
-        // ✅ Lien complet
         link: (() => {
           const anchor = el.querySelector("a[class*='ListItem_title']");
           if (!anchor) return "";
           const href = anchor.getAttribute("href");
           if (!href) return "";
-          return href.startsWith("http")
-            ? href
-            : "https://www.autoscout24.fr" + href;
+          return href.startsWith("http") ? href : "https://www.autoscout24.fr" + href;
         })(),
       }));
     });
@@ -72,19 +96,17 @@ async function autoScroll(page) {
   await page.evaluate(async () => {
     await new Promise((resolve) => {
       let totalHeight = 0;
-      const distance = 400; // px à scroller à chaque étape
+      const distance = 400;
       const timer = setInterval(() => {
         const scrollHeight = document.body.scrollHeight;
         window.scrollBy(0, distance);
         totalHeight += distance;
-
         if (totalHeight >= scrollHeight - window.innerHeight) {
           clearInterval(timer);
           resolve();
         }
-      }, 300); // vitesse du scroll (ms)
+      }, 300);
     });
   });
-  // On attend un peu pour laisser charger les images
   await new Promise((r) => setTimeout(r, 3000));
 }

@@ -5,7 +5,7 @@ export const getClientById = async (req, res) => {
     const [rows] = await pool.query(
       `SELECT c.*, 
               vr.marque, vr.modele, vr.couleur, vr.budget, vr.max_km, 
-              vr.description, vr.carburant, vr.premiere_immat, vr.puissance_min
+              vr.description, vr.carburant, vr.premiere_immat, vr.puissance_min, vr.boite
        FROM clients c
        LEFT JOIN vehicle_requests vr ON c.id = vr.client_id
        WHERE c.id = ?`,
