@@ -5,6 +5,7 @@ import mysql from "mysql2";
 import apiRoutes from "./routes/api.js";
 import authRoutes from "./routes/auth.routes.js";
 import clientRoutes from "./routes/client.routes.js";
+import vehicleRoutes from "./routes/vehicle.routes.js";
 dotenv.config();
 
 const app = express();
@@ -29,6 +30,7 @@ db.connect((err) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/clients", clientRoutes);
+app.use("/api/vehicles", vehicleRoutes);
 app.use("/api", apiRoutes);
 
 const PORT = process.env.PORT || 3000;

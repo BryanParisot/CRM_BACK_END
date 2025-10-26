@@ -91,7 +91,6 @@ export const scrapeAutoScout = async (clientData) => {
   }
 };
 
-// --- Fonction utilitaire : scroll progressif jusqu’en bas
 async function autoScroll(page) {
   await page.evaluate(async () => {
     await new Promise((resolve) => {
