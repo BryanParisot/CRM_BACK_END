@@ -4,13 +4,13 @@ import {
   getPreselectedVehicles,
   selectByClient,
   selectVehicleByClient,
-} from "../controllers/vehicle.controller.js";
+} from "../controllers/vehicles.controller.js";
 import { verifyToken } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-router.post("/preselect", verifyToken, preselectVehicles);
-router.get("/client/:id", verifyToken, getPreselectedVehicles);
+router.post("/preselect",preselectVehicles);
+router.get("/client/:id", getPreselectedVehicles);
 router.post("/client-select", selectByClient);
 router.post("/select", selectVehicleByClient);
 

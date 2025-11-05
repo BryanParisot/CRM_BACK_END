@@ -6,10 +6,10 @@ import pool from "../config/db.js";
  */
 export const preselectVehicles = async (req, res) => {
   try {
-    const { clientId, vehicles } = req.body;
+    const { client_id, vehicles } = req.body;
 
-    if (!clientId || !vehicles || vehicles.length === 0) {
-      return res.status(400).json({ message: "❌ clientId et véhicules requis." });
+    if (!client_id || !Array.isArray(vehicles)) {
+      return res.status(400).json({ message: "Requête invalide" });
     }
 
     for (const v of vehicles) {
@@ -18,16 +18,16 @@ export const preselectVehicles = async (req, res) => {
          (client_id, title, price, mileage, year, fuel, gearbox, power, image, link, selected_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'admin')`,
         [
-          clientId,
-          v.title || null,
-          v.price || null,
-          v.mileage || null,
-          v.year || null,
-          v.fuel || null,
-          v.gearbox || null,
-          v.power || null,
-          v.image || null,
-          v.link || null,
+          client_id,
+          v.title,
+          v.price,
+          v.mileage,
+          v.year,
+          v.fuel,
+          v.gearbox,
+          v.power,
+          v.image,
+          v.link,
         ]
       );
     }
@@ -47,7 +47,7 @@ export const getPreselectedVehicles = async (req, res) => {
   try {
     const { id } = req.params; // id du client
     const [rows] = await pool.query(
-      "SELECT * FROM selected_vehicles WHERE client_id = ? AND selected_by = 'admin'",
+      "SELECT * FROM selected_vehicles WHERE client_id = ? ",
       [id]
     );
     res.json(rows);
