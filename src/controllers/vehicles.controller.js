@@ -40,6 +40,33 @@ export const preselectVehicles = async (req, res) => {
 };
 
 /**
+ * DELETE /api/vehicles/preselect/:id
+ * → Supprime un véhicule présélectionné par l’admin
+ */
+export const deletePreselectedVehicle = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const [result] = await pool.query(
+      "DELETE FROM selected_vehicles WHERE id = ?",
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Véhicule non trouvé" });
+    }
+
+    res.json({ message: "✅ Véhicule présélectionné supprimé avec succès" });
+  } catch (error) {
+    console.error("❌ Erreur suppression véhicule :", error);
+    res.status(500).json({
+      message: "Erreur serveur lors de la suppression du véhicule",
+      error: error.message,
+    });
+  }
+};
+
+/**
  * GET /api/vehicles/client/:id
  * → Récupère les véhicules présélectionnés par l’admin pour un client
  */

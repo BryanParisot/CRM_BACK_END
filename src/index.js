@@ -5,6 +5,7 @@ import mysql from "mysql2";
 import apiRoutes from "./routes/api.js";
 import authRoutes from "./routes/auth.routes.js";
 import clientRoutes from "./routes/client.routes.js";
+import clientStepsRoutes from "./routes/clientSteps.routes.js";
 import vehicleRoutes from "./routes/vehicle.routes.js";
 dotenv.config();
 
@@ -30,6 +31,7 @@ db.connect((err) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/clients", clientRoutes);
+app.use("/api/clients", clientStepsRoutes);
 app.use("/api/vehicles", vehicleRoutes);
 app.use("/api", apiRoutes);
 

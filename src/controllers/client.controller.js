@@ -27,7 +27,7 @@ export const getClients = async (req, res) => {
   try {
     const userId = req.userId;
     const [clients] = await pool.query(
-      `SELECT c.*, vr.marque, vr.modele, vr.budget, vr.vehicle_color
+      `SELECT c.*, vr.marque, vr.modele, vr.budget, vr.couleur
        FROM clients c
        LEFT JOIN vehicle_requests vr ON c.id = vr.client_id
        WHERE c.user_id = ?`,
@@ -41,7 +41,29 @@ export const getClients = async (req, res) => {
 };
 
 
+/**
+ * PATCH /api/clients/:id
+ * Mise à jour partielle (step, progress, champs)
+ */
+export const updateClient = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const fields = req.body; // ex: { step: 2, progress: 50 }
+    if (!fields || Object.keys(fields).length === 0)
+      return res.status(400).json({ message: "Aucun champ à mettre à jour" });
 
+    const keys = Object.keys(fields);
+    const values = Object.values(fields);
+
+    const setClause = keys.map(k => `${k} = ?`).join(", ");
+    await pool.query(`UPDATE clients SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [...values, id]);
+
+    res.json({ message: "Client mis à jour." });
+  } catch (error) {
+    console.error("updateClient:", error);
+    res.status(500).json({ message: "Erreur serveur", error: error.message });
+  }
+};
 
 export const createClient = async (req, res) => {
   try {
