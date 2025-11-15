@@ -31,7 +31,6 @@ export const addClientStep = async (req, res) => {
     const { id } = req.params;
     const { to_step, changed_by = "admin" } = req.body;
 
-    // Récupère l'étape actuelle du client
     const [[client]] = await pool.query(
       "SELECT step FROM clients WHERE id = ?",
       [id]
@@ -43,13 +42,25 @@ export const addClientStep = async (req, res) => {
 
     const from_step = client.step;
 
-    // Met à jour l'étape du client
+    // Étape valide
+    if (to_step < 1 || to_step > 6) {
+      return res.status(400).json({ message: "Étape invalide" });
+    }
+
+    // Interdiction de sauter > 1 étape
+    if (Math.abs(to_step - from_step) > 1) {
+      return res.status(400).json({
+        message: "Impossible de sauter plusieurs étapes d’un coup.",
+      });
+    }
+
+    // Maj client
     await pool.query(
       "UPDATE clients SET step = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
       [to_step, id]
     );
 
-    // Enregistre la transition dans client_steps
+    // Log historique
     await pool.query(
       `INSERT INTO client_steps (client_id, from_step, to_step, changed_by)
        VALUES (?, ?, ?, ?)`,
@@ -57,8 +68,10 @@ export const addClientStep = async (req, res) => {
     );
 
     res.json({
-      message: "✅ Étape mise à jour avec succès",
-      client_id: id,
+      message:
+        to_step > from_step
+          ? `Étape ${from_step} → ${to_step} validée`
+          : `Rétrogradation effectuée (${from_step} → ${to_step})`,
       from_step,
       to_step,
     });
