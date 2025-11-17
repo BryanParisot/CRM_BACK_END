@@ -6,7 +6,9 @@ import apiRoutes from "./routes/api.js";
 import authRoutes from "./routes/auth.routes.js";
 import clientRoutes from "./routes/client.routes.js";
 import clientStepsRoutes from "./routes/clientSteps.routes.js";
+import notificationsRoutes from "./routes/notifications.routes.js";
 import vehicleRoutes from "./routes/vehicle.routes.js";
+
 dotenv.config();
 
 const app = express();
@@ -34,6 +36,7 @@ app.use("/api/clients", clientRoutes);
 app.use("/api/clients", clientStepsRoutes);
 app.use("/api/vehicles", vehicleRoutes);
 app.use("/api", apiRoutes);
+app.use("/api/notifications", notificationsRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>

@@ -31,8 +31,9 @@ export const addClientStep = async (req, res) => {
     const { id } = req.params;
     const { to_step, changed_by = "admin" } = req.body;
 
+    // 🔍 Récupérer l'étape et le nom du client
     const [[client]] = await pool.query(
-      "SELECT step FROM clients WHERE id = ?",
+      "SELECT name, step FROM clients WHERE id = ?",
       [id]
     );
 
@@ -42,36 +43,37 @@ export const addClientStep = async (req, res) => {
 
     const from_step = client.step;
 
-    // Étape valide
-    if (to_step < 1 || to_step > 6) {
-      return res.status(400).json({ message: "Étape invalide" });
-    }
-
-    // Interdiction de sauter > 1 étape
+    // Validation logique habituelle
     if (Math.abs(to_step - from_step) > 1) {
       return res.status(400).json({
-        message: "Impossible de sauter plusieurs étapes d’un coup.",
+        message: "Impossible de sauter plusieurs étapes.",
       });
     }
 
-    // Maj client
+    // Mise à jour de l'étape
     await pool.query(
       "UPDATE clients SET step = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
       [to_step, id]
     );
 
-    // Log historique
+    // Enregistrement historique
     await pool.query(
       `INSERT INTO client_steps (client_id, from_step, to_step, changed_by)
        VALUES (?, ?, ?, ?)`,
       [id, from_step, to_step, changed_by]
     );
 
+    // 🔔 ⭐ ENREGISTRER UNE NOTIFICATION AVEC LE NOM DU CLIENT ⭐
+    const message = `${client.name} est passé à l’étape ${to_step}.`;
+
+    await pool.query(
+      `INSERT INTO notifications (client_id, message, type, is_read)
+       VALUES (?, ?,?, FALSE)`,
+      [id, message, "step_change"]
+    );
+
     res.json({
-      message:
-        to_step > from_step
-          ? `Étape ${from_step} → ${to_step} validée`
-          : `Rétrogradation effectuée (${from_step} → ${to_step})`,
+      message: `Étape ${from_step} → ${to_step} validée`,
       from_step,
       to_step,
     });

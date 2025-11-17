@@ -205,7 +205,7 @@ export const getClientPublicData = async (req, res) => {
 export const saveClientSelectionFromLink = async (req, res) => {
   try {
     const { token } = req.params;
-    const { vehicle_ids } = req.body; // tableau d'IDs
+    const { vehicle_ids } = req.body;
 
     if (!Array.isArray(vehicle_ids) || vehicle_ids.length === 0) {
       return res.status(400).json({ message: "Aucun véhicule reçu." });
@@ -219,7 +219,7 @@ export const saveClientSelectionFromLink = async (req, res) => {
 
     // Trouver le client via le token
     const [[client]] = await pool.query(
-      "SELECT id FROM clients WHERE access_token = ?",
+      "SELECT id, name FROM clients WHERE access_token = ?",
       [token]
     );
 
@@ -229,19 +229,30 @@ export const saveClientSelectionFromLink = async (req, res) => {
 
     const clientId = client.id;
 
-    // Tout remettre à 'admin' d'abord (on enlève les anciennes sélections client)
+    // Reset anciennes sélections du client
     await pool.query(
       "UPDATE selected_vehicles SET selected_by = 'admin' WHERE client_id = ? AND selected_by = 'client'",
       [clientId]
     );
 
-    // Marquer les nouveaux choix comme 'client'
+    // Appliquer les nouvelles sélections
     for (const vid of vehicle_ids) {
       await pool.query(
         "UPDATE selected_vehicles SET selected_by = 'client' WHERE id = ? AND client_id = ?",
         [vid, clientId]
       );
     }
+
+    // 🔥🔥🔥 AJOUT NOTIFICATION DANS LA BDD 🔥🔥🔥
+    await pool.query(
+      `INSERT INTO notifications (client_id, message, type, is_read)
+       VALUES (?, ?, ?, FALSE)`,
+      [
+        clientId,
+        `Le client ${client.name} a sélectionné ${vehicle_ids.length} véhicule(s).`,
+        "client_selection",
+      ]
+    );
 
     res.json({
       message: "Sélections client enregistrées ✅",
