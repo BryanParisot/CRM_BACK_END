@@ -1,6 +1,7 @@
 import express from "express";
 import {
   createClient,
+  deleteClient,
   generateClientAccessLink,
   getClientById,
   getClientPublicData,
@@ -20,5 +21,6 @@ router.get("/", verifyToken, getClients);
 router.post("/", verifyToken, createClient);
 router.get("/:id", getClientById);
 router.patch("/:id", updateClient);
+router.delete("/:id", verifyToken, deleteClient);
 
 export default router;

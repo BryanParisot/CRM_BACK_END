@@ -90,7 +90,7 @@ export const createClient = async (req, res) => {
 
     // 1️⃣ Création du client
     const [clientResult] = await pool.query(
-       `INSERT INTO clients (user_id, name, email, phone, date_of_birth, step)
+      `INSERT INTO clients (user_id, name, email, phone, date_of_birth, step)
        VALUES (?, ?, ?, ?, ?, 1)`,
       [userId, name, email, phone, date_of_birth]
     );
@@ -98,7 +98,7 @@ export const createClient = async (req, res) => {
     const clientId = clientResult.insertId;
 
     // 2️⃣ Création de la demande véhicule associée
- await pool.query(
+    await pool.query(
       `INSERT INTO vehicle_requests (client_id, marque, modele, couleur, carburant, premiere_immat, budget, max_km, description, puissance_min, boite)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -261,5 +261,50 @@ export const saveClientSelectionFromLink = async (req, res) => {
   } catch (error) {
     console.error("❌ Erreur saveClientSelectionFromLink:", error);
     res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+// ============================================
+//  Suppression d'un client
+// ============================================
+export const deleteClient = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId; // ID de l'utilisateur authentifié
+
+    // Vérifier que le client existe et appartient à l'utilisateur
+    const [[client]] = await pool.query(
+      "SELECT id, user_id, name FROM clients WHERE id = ?",
+      [id]
+    );
+
+    if (!client) {
+      return res.status(404).json({ message: "Client non trouvé" });
+    }
+
+    // Vérifier que le client appartient à l'utilisateur connecté
+    if (client.user_id !== userId) {
+      return res.status(403).json({ message: "Accès refusé" });
+    }
+
+    // Suppression en cascade des données associées
+    // 1. Supprimer les véhicules sélectionnés
+    await pool.query("DELETE FROM selected_vehicles WHERE client_id = ?", [id]);
+
+    // 2. Supprimer les demandes de véhicules
+    await pool.query("DELETE FROM vehicle_requests WHERE client_id = ?", [id]);
+
+    // 3. Supprimer les notifications
+    await pool.query("DELETE FROM notifications WHERE client_id = ?", [id]);
+
+    // 4. Supprimer le client
+    await pool.query("DELETE FROM clients WHERE id = ?", [id]);
+
+    res.json({
+      message: `Client "${client.name}" et toutes ses données associées ont été supprimés avec succès`,
+    });
+  } catch (error) {
+    console.error("❌ Erreur deleteClient:", error);
+    res.status(500).json({ message: "Erreur serveur", error: error.message });
   }
 };
