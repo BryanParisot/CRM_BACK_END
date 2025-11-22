@@ -45,24 +45,100 @@ export const getClients = async (req, res) => {
 
 /**
  * PATCH /api/clients/:id
- * Mise à jour partielle (step, progress, champs)
+ * Mise à jour complète du client et de sa demande de véhicule
  */
 export const updateClient = async (req, res) => {
   try {
     const { id } = req.params;
-    const fields = req.body; // ex: { step: 2, progress: 50 }
-    if (!fields || Object.keys(fields).length === 0)
-      return res.status(400).json({ message: "Aucun champ à mettre à jour" });
+    const userId = req.userId; // ID de l'utilisateur authentifié
+    const {
+      // Informations client
+      name,
+      email,
+      phone,
+      date_of_birth,
+      step,
+      progress,
+      // Informations véhicule
+      marque,
+      modele,
+      budget,
+      max_km,
+      vehicle_color,
+      description,
+      carburant,
+      first_registration,
+      puissance_min,
+      boite
+    } = req.body;
 
-    const keys = Object.keys(fields);
-    const values = Object.values(fields);
+    // Vérifier que le client existe et appartient à l'utilisateur
+    const [[client]] = await pool.query(
+      "SELECT id, user_id FROM clients WHERE id = ?",
+      [id]
+    );
 
-    const setClause = keys.map(k => `${k} = ?`).join(", ");
-    await pool.query(`UPDATE clients SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [...values, id]);
+    if (!client) {
+      return res.status(404).json({ message: "Client non trouvé" });
+    }
 
-    res.json({ message: "Client mis à jour." });
+    // Vérifier que le client appartient à l'utilisateur connecté
+    if (client.user_id !== userId) {
+      return res.status(403).json({ message: "Accès refusé" });
+    }
+
+    // Construire dynamiquement la requête de mise à jour pour le client
+    const clientFields = {};
+    if (name !== undefined) clientFields.name = name;
+    if (email !== undefined) clientFields.email = email;
+    if (phone !== undefined) clientFields.phone = phone;
+    if (date_of_birth !== undefined) clientFields.date_of_birth = date_of_birth;
+    if (step !== undefined) clientFields.step = step;
+    if (progress !== undefined) clientFields.progress = progress;
+
+    // Mettre à jour le client si des champs sont fournis
+    if (Object.keys(clientFields).length > 0) {
+      const clientKeys = Object.keys(clientFields);
+      const clientValues = Object.values(clientFields);
+      const clientSetClause = clientKeys.map(k => `${k} = ?`).join(", ");
+
+      await pool.query(
+        `UPDATE clients SET ${clientSetClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [...clientValues, id]
+      );
+    }
+
+    // Construire dynamiquement la requête de mise à jour pour la demande de véhicule
+    const vehicleFields = {};
+    if (marque !== undefined) vehicleFields.marque = marque;
+    if (modele !== undefined) vehicleFields.modele = modele;
+    if (budget !== undefined) vehicleFields.budget = budget;
+    if (max_km !== undefined) vehicleFields.max_km = max_km;
+    if (vehicle_color !== undefined) vehicleFields.couleur = vehicle_color;
+    if (description !== undefined) vehicleFields.description = description;
+    if (carburant !== undefined) vehicleFields.carburant = carburant;
+    if (first_registration !== undefined) vehicleFields.premiere_immat = first_registration;
+    if (puissance_min !== undefined) vehicleFields.puissance_min = puissance_min;
+    if (boite !== undefined) vehicleFields.boite = boite;
+
+    // Mettre à jour la demande de véhicule si des champs sont fournis
+    if (Object.keys(vehicleFields).length > 0) {
+      const vehicleKeys = Object.keys(vehicleFields);
+      const vehicleValues = Object.values(vehicleFields);
+      const vehicleSetClause = vehicleKeys.map(k => `${k} = ?`).join(", ");
+
+      await pool.query(
+        `UPDATE vehicle_requests SET ${vehicleSetClause} WHERE client_id = ?`,
+        [...vehicleValues, id]
+      );
+    }
+
+    res.json({
+      message: "Client et demande de véhicule mis à jour avec succès",
+      clientId: id
+    });
   } catch (error) {
-    console.error("updateClient:", error);
+    console.error("❌ Erreur updateClient:", error);
     res.status(500).json({ message: "Erreur serveur", error: error.message });
   }
 };

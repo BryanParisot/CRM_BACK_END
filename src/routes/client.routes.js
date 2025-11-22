@@ -20,7 +20,7 @@ router.post("/public/:token/select", saveClientSelectionFromLink);
 router.get("/", verifyToken, getClients);
 router.post("/", verifyToken, createClient);
 router.get("/:id", getClientById);
-router.patch("/:id", updateClient);
+router.patch("/:id", verifyToken, updateClient);
 router.delete("/:id", verifyToken, deleteClient);
 
 export default router;
