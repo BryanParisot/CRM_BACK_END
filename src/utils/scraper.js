@@ -90,56 +90,64 @@ export const scrapeAutoScout = async (clientData) => {
     console.log("📸 Scroll terminé, extraction des annonces...");
 
     const vehicles = await page.evaluate(() => {
+      // Sélecteur mis à jour pour la vue "decluttered"
       const items = Array.from(
-        document.querySelectorAll("div.ListItem_wrapper__TxHWu")
+        document.querySelectorAll('article[data-testid="decluttered-list-item"]')
       );
-      if (items.length === 0) return [];
 
-      return items.map((el) => ({
-        title:
-          el.querySelector("a[class*='ListItem_title'] h2")?.innerText.trim() ||
-          "",
-        price:
-          el
-            .querySelector('p[data-testid="regular-price"]')
-            ?.innerText.trim() || "",
-        mileage:
-          el
-            .querySelector('span[data-testid="VehicleDetails-mileage_road"]')
-            ?.innerText.trim() || "",
-        year:
-          el
-            .querySelector('span[data-testid="VehicleDetails-calendar"]')
-            ?.innerText.trim() || "",
-        fuel:
-          el
-            .querySelector('span[data-testid="VehicleDetails-gas_pump"]')
-            ?.innerText.trim() || "",
-        gearbox:
-          el
-            .querySelector('span[data-testid="VehicleDetails-gearbox"]')
-            ?.innerText.trim() || "",
-        power:
-          el
-            .querySelector('span[data-testid="VehicleDetails-speedometer"]')
-            ?.innerText.trim() || "",
-        image: (() => {
-          const img = el.querySelector("picture img");
-          if (img?.src) return img.src;
+      // Fallback sur l'ancien sélecteur si le nouveau ne trouve rien
+      if (items.length === 0) {
+        const oldItems = Array.from(document.querySelectorAll('article[data-testid="list-item"]'));
+        if (oldItems.length > 0) return oldItems.map(el => ({ title: "Old Selector Found - Please Update Scraper Logic", price: "0" })); // Juste pour signaler
+        return [];
+      }
+
+      return items.map((el) => {
+        const titleEl = el.querySelector("h2.ListItemTitle_heading__G2W_N") || el.querySelector("h2");
+        const priceEl = el.querySelector("span.CurrentPrice_price__Ekflz") || el.querySelector('p[data-testid="regular-price"]');
+
+        // Extraction des détails via les "pills"
+        const pills = el.querySelectorAll("div.ListItemVehicleDetails_pillContainer__do2qz > div span.ListItemPill_text__Cr6mq");
+        const yearEl = pills.length > 0 ? pills[0] : null;
+        const mileageEl = pills.length > 1 ? pills[1] : null;
+        const fuelEl = pills.length > 2 ? pills[2] : null;
+        const powerEl = pills.length > 3 ? pills[3] : null;
+        const gearboxEl = pills.length > 4 ? pills[4] : null; // Tentative de récupérer la boite si présente
+
+        const linkEl = el.querySelector("a.ListItemTitle_anchor__4TrfR") || el.querySelector("a");
+        const imageEl = el.querySelector("picture img.ListItemImage_image__syCVC") || el.querySelector("picture img");
+
+        let imgUrl = "https://via.placeholder.com/250x188?text=No+Image";
+        if (imageEl && imageEl.src) {
+          imgUrl = imageEl.src;
+        } else {
           const source = el.querySelector("picture source");
-          const srcset = source?.getAttribute("srcset");
-          return srcset
-            ? srcset.split(" ")[0]
-            : "https://via.placeholder.com/250x188?text=No+Image";
-        })(),
-        link: (() => {
-          const anchor = el.querySelector("a[class*='ListItem_title']");
-          const href = anchor?.getAttribute("href");
-          return href?.startsWith("http")
-            ? href
-            : `https://www.autoscout24.fr${href || ""}`;
-        })(),
-      }));
+          const srcset = source ? source.getAttribute("srcset") : null;
+          if (srcset) {
+            imgUrl = srcset.split(" ")[0];
+          }
+        }
+
+        let linkUrl = "";
+        if (linkEl) {
+          const href = linkEl.getAttribute("href");
+          if (href) {
+            linkUrl = href.startsWith("http") ? href : `https://www.autoscout24.fr${href}`;
+          }
+        }
+
+        return {
+          title: titleEl ? titleEl.innerText.trim() : "",
+          price: priceEl ? priceEl.innerText.trim() : "",
+          mileage: mileageEl ? mileageEl.innerText.trim() : "",
+          year: yearEl ? yearEl.innerText.trim() : "",
+          fuel: fuelEl ? fuelEl.innerText.trim() : "",
+          gearbox: gearboxEl ? gearboxEl.innerText.trim() : "",
+          power: powerEl ? powerEl.innerText.trim() : "",
+          image: imgUrl,
+          link: linkUrl
+        };
+      });
     });
 
     console.log(`🚗 ${vehicles.length} véhicules trouvés`);

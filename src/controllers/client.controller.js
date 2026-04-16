@@ -268,6 +268,15 @@ export const getClientPublicData = async (req, res) => {
       [client.id]
     );
 
+    // Récupérer les checklists pour chaque véhicule
+    for (const vehicle of vehicles) {
+      const [checks] = await pool.query(
+        "SELECT id, name, status FROM vehicle_checks WHERE selected_vehicle_id = ?",
+        [vehicle.id]
+      );
+      vehicle.checklist = checks;
+    }
+
     res.json({ client, vehicles });
   } catch (error) {
     console.error("❌ Erreur getClientPublicData:", error);
@@ -381,6 +390,48 @@ export const deleteClient = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Erreur deleteClient:", error);
+    res.status(500).json({ message: "Erreur serveur", error: error.message });
+  }
+};
+
+// ============================================
+//  Gestion de la Checklist Technique
+// ============================================
+export const addVehicleChecks = async (req, res) => {
+  try {
+    const { vehicleId } = req.params;
+    const { checks } = req.body; // Array of { name, status }
+
+    if (!Array.isArray(checks) || checks.length === 0) {
+      return res.status(400).json({ message: "Aucun point de contrôle fourni." });
+    }
+
+    // Vérifier que le véhicule existe
+    const [[vehicle]] = await pool.query(
+      "SELECT id FROM selected_vehicles WHERE id = ?",
+      [vehicleId]
+    );
+
+    if (!vehicle) {
+      return res.status(404).json({ message: "Véhicule non trouvé." });
+    }
+
+    // Supprimer les anciens checks pour ce véhicule (remplacement complet)
+    await pool.query("DELETE FROM vehicle_checks WHERE selected_vehicle_id = ?", [
+      vehicleId,
+    ]);
+
+    // Insérer les nouveaux checks
+    for (const check of checks) {
+      await pool.query(
+        "INSERT INTO vehicle_checks (selected_vehicle_id, name, status) VALUES (?, ?, ?)",
+        [vehicleId, check.name, check.status || "pending"]
+      );
+    }
+
+    res.json({ message: "Checklist sauvegardée avec succès." });
+  } catch (error) {
+    console.error("❌ Erreur addVehicleChecks:", error);
     res.status(500).json({ message: "Erreur serveur", error: error.message });
   }
 };

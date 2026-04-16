@@ -77,6 +77,16 @@ export const getPreselectedVehicles = async (req, res) => {
       "SELECT * FROM selected_vehicles WHERE client_id = ? ",
       [id]
     );
+
+    // Récupérer les checklists pour chaque véhicule
+    for (const vehicle of rows) {
+      const [checks] = await pool.query(
+        "SELECT * FROM vehicle_checks WHERE selected_vehicle_id = ?",
+        [vehicle.id]
+      );
+      vehicle.checklist = checks;
+    }
+
     res.json(rows);
   } catch (error) {
     console.error("Erreur getPreselectedVehicles:", error);
