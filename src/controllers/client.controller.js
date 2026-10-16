@@ -462,41 +462,17 @@ export const deleteClient = async (req, res) => {
 // ============================================
 //  Gestion de la Checklist Technique
 // ============================================
-export const addVehicleChecks = async (req, res) => {
-  try {
-    const { vehicleId } = req.params;
-    const { checks } = req.body; // Array of { name, status }
-
-    if (!Array.isArray(checks) || checks.length === 0) {
-      return res.status(400).json({ message: "Aucun point de contrôle fourni." });
-    }
-
-    // Vérifier que le véhicule existe
-    const [[vehicle]] = await pool.query(
-      "SELECT id FROM selected_vehicles WHERE id = ?",
-      [vehicleId]
-    );
-
-    if (!vehicle) {
-      return res.status(404).json({ message: "Véhicule non trouvé." });
-    }
-
-    // Supprimer les anciens checks pour ce véhicule (remplacement complet)
-    await pool.query("DELETE FROM vehicle_checks WHERE selected_vehicle_id = ?", [
-      vehicleId,
-    ]);
-
-    // Insérer les nouveaux checks
-    for (const check of checks) {
-      await pool.query(
-        "INSERT INTO vehicle_checks (selected_vehicle_id, name, status) VALUES (?, ?, ?)",
-        [vehicleId, check.name, check.status || "pending"]
-      );
-    }
-
-    res.json({ message: "Checklist sauvegardée avec succès." });
-  } catch (error) {
-    console.error("❌ Erreur addVehicleChecks:", error);
-    res.status(500).json({ message: "Erreur serveur", error: error.message });
-  }
+export const addVehicleChecks = async (req,res) => {
+  const checks=req.body?.checks;
+  const statuses=['pending','validated','issue','rejected','not_applicable'];
+  if(!Array.isArray(checks)||!checks.length||checks.length>50||checks.some(check=>!check||typeof check.name!=="string"||!check.name.trim()||check.name.length>255||!statuses.includes(check.status??'pending')))return res.status(400).json({message:'Point de contrôle ou statut invalide.'});
+  const db=await pool.getConnection();
+  try{
+    await db.beginTransaction();
+    const [[vehicle]]=await db.query('SELECT v.id FROM selected_vehicles v JOIN clients c ON c.id=v.client_id WHERE v.id=? AND c.user_id=? FOR UPDATE',[req.params.vehicleId,req.userId]);
+    if(!vehicle){await db.rollback();return res.status(404).json({message:'Véhicule introuvable.'});}
+    await db.query('DELETE FROM vehicle_checks WHERE selected_vehicle_id=?',[vehicle.id]);
+    for(const check of checks)await db.query('INSERT INTO vehicle_checks (selected_vehicle_id,name,status) VALUES (?,?,?)',[vehicle.id,check.name.trim(),check.status??'pending']);
+    await db.commit();res.json({message:'Checklist sauvegardée avec succès.'});
+  }catch(error){await db.rollback();console.error('Checklist :',error.message);res.status(500).json({message:'Impossible de sauvegarder la checklist.'});}finally{db.release();}
 };
