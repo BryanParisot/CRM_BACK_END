@@ -2,17 +2,22 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import mysql from "mysql2";
-import apiRoutes from "./routes/api.js";
 import authRoutes from "./routes/auth.routes.js";
 import clientRoutes from "./routes/client.routes.js";
 import clientStepsRoutes from "./routes/clientSteps.routes.js";
 import notificationsRoutes from "./routes/notifications.routes.js";
 import vehicleRoutes from "./routes/vehicle.routes.js";
+import clientDocumentsRoutes from './routes/clientDocuments.routes.js';
+import settlementRoutes from './routes/settlement.routes.js';
+import deliveryRoutes from './routes/delivery.routes.js';
+import {youtrustRouter,youtrustWebhookRouter} from './routes/youtrust.routes.js';
+import {startYoutrustSync} from './services/youtrust.service.js';
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
+app.use("/api/webhooks/youtrust",youtrustWebhookRouter);
 app.use(express.json());
 
 const db = mysql.createConnection({
@@ -32,13 +37,18 @@ db.connect((err) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/clients", youtrustRouter);
+app.use("/api/clients", settlementRoutes);
+app.use("/api/clients", deliveryRoutes);
+app.use("/api/clients", clientDocumentsRoutes);
 app.use("/api/clients", clientRoutes);
 app.use("/api/clients", clientStepsRoutes);
 app.use("/api/vehicles", vehicleRoutes);
-app.use("/api", apiRoutes);
 app.use("/api/notifications", notificationsRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
   console.log(`🔥 Serveur lancé sur : http://localhost:${PORT}`)
 );
+
+startYoutrustSync();

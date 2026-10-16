@@ -1,5 +1,60 @@
 import pool from "../config/db.js";
 import crypto from "crypto";
+import {clientIdentity} from "../utils/clientIdentity.js";
+
+export const updateDepositAmount = async (req, res) => {
+  const amount = req.body.deposit_amount;
+  if (typeof amount !== 'string' || !/^\d{1,10}(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) {
+    return res.status(400).json({ message: 'Saisissez un montant positif avec au maximum deux décimales.' });
+  }
+  try {
+    const [[client]] = await pool.query('SELECT id, step, payment_confirmed_at FROM clients WHERE id = ? AND user_id = ?', [req.params.id, req.userId]);
+    if (!client) return res.status(404).json({ message: 'Client introuvable.' });
+    if (client.step !== 3) return res.status(400).json({ message: 'Le montant de l’acompte se modifie à l’étape 3.' });
+    if (client.payment_confirmed_at) return res.status(409).json({message:'Retirez la confirmation de réception avant de modifier l’acompte.'});
+    const [updated]=await pool.query('UPDATE clients SET deposit_amount = ? WHERE id = ? AND user_id = ? AND step=3 AND payment_confirmed_at IS NULL', [amount, client.id, req.userId]);
+    if(!updated.affectedRows)return res.status(409).json({message:'Le dossier a changé. Actualisez la page avant de modifier l’acompte.'});
+    res.json({ deposit_amount: Number(amount).toFixed(2) });
+  } catch (error) {
+    res.status(500).json({ message: 'Impossible de modifier l’acompte.' });
+  }
+};
+
+export const saveVehicleDecision = async (req, res) => {
+  const { decision } = req.body;
+  if (!["accepted", "rejected", "pending"].includes(decision)) {
+    return res.status(400).json({ message: "Choix invalide." });
+  }
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    const [[vehicle]] = await connection.query(
+      `SELECT v.id, v.client_id, v.selected_by, v.title, c.name
+       FROM selected_vehicles v JOIN clients c ON c.id = v.client_id
+       WHERE c.access_token = ? AND v.id = ? FOR UPDATE`,
+      [req.params.token, req.params.vehicleId]
+    );
+    if (!vehicle) {
+      await connection.rollback();
+      return res.status(404).json({ message: "Proposition introuvable." });
+    }
+    const selectedBy = { accepted: "client", rejected: "rejected", pending: "admin" }[decision];
+    if (vehicle.selected_by !== selectedBy) {
+      await connection.query("UPDATE selected_vehicles SET selected_by = ? WHERE id = ?", [selectedBy, vehicle.id]);
+      const label = { accepted: "a retenu", rejected: "a refusé", pending: "a remis en attente" }[decision];
+      await connection.query("INSERT INTO notifications (client_id, type, message) VALUES (?, ?, ?)",
+        [vehicle.client_id, "client_selection", `${vehicle.name} ${label} la proposition ${vehicle.title}.`]);
+    }
+    await connection.commit();
+    res.json({ id: vehicle.id, selected_by: selectedBy });
+  } catch (error) {
+    if (connection) await connection.rollback();
+    res.status(500).json({ message: "Impossible d'enregistrer le choix." });
+  } finally {
+    connection?.release();
+  }
+};
 
 
 export const getClientById = async (req, res) => {
@@ -74,7 +129,7 @@ export const updateClient = async (req, res) => {
 
     // Vérifier que le client existe et appartient à l'utilisateur
     const [[client]] = await pool.query(
-      "SELECT id, user_id FROM clients WHERE id = ?",
+      "SELECT id, user_id, first_name, last_name FROM clients WHERE id = ?",
       [id]
     );
 
@@ -89,7 +144,13 @@ export const updateClient = async (req, res) => {
 
     // Construire dynamiquement la requête de mise à jour pour le client
     const clientFields = {};
-    if (name !== undefined) clientFields.name = name;
+    if (req.body.first_name !== undefined || req.body.last_name !== undefined) {
+      try {
+        Object.assign(clientFields, clientIdentity(req.body.first_name !== undefined ? req.body.first_name : client.first_name, req.body.last_name !== undefined ? req.body.last_name : client.last_name));
+      } catch(error) { return res.status(400).json({message:error.message}); }
+    } else if (name !== undefined) {
+      return res.status(400).json({message:'Utilisez les champs Prénom et Nom séparés.'});
+    }
     if (email !== undefined) clientFields.email = email;
     if (phone !== undefined) clientFields.phone = phone;
     if (date_of_birth !== undefined) clientFields.date_of_birth = date_of_birth;
@@ -162,13 +223,16 @@ export const createClient = async (req, res) => {
       boite
     } = req.body;
 
+    let identity;
+    try { identity = clientIdentity(req.body.first_name, req.body.last_name); }
+    catch(error) { return res.status(400).json({message:error.message}); }
     const userId = req.userId;
 
     // 1️⃣ Création du client
     const [clientResult] = await pool.query(
-      `INSERT INTO clients (user_id, name, email, phone, date_of_birth, step)
-       VALUES (?, ?, ?, ?, ?, 1)`,
-      [userId, name, email, phone, date_of_birth]
+      `INSERT INTO clients (user_id, name, first_name, last_name, email, phone, date_of_birth, step)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+      [userId, identity.name, identity.first_name, identity.last_name, email, phone, date_of_birth || null]
     );
 
     const clientId = clientResult.insertId;
@@ -192,10 +256,8 @@ export const createClient = async (req, res) => {
       ]
     );
 
-    res.status(201).json({
-      message: "Client et demande véhicule créés avec succès",
-      clientId,
-    });
+    const [[created]] = await pool.query("SELECT c.*, vr.marque, vr.modele, vr.budget FROM clients c LEFT JOIN vehicle_requests vr ON vr.client_id=c.id WHERE c.id=?", [clientId]);
+    res.status(201).json({ ...created, clientId });
   } catch (error) {
     console.error("❌ Erreur création client:", error);
     res.status(500).json({ message: "Erreur serveur", error: error.message });
@@ -252,7 +314,10 @@ export const getClientPublicData = async (req, res) => {
 
     // Trouver le client via le token
     const [[client]] = await pool.query(
-      "SELECT id, name, email, phone, step FROM clients WHERE access_token = ?",
+      `SELECT c.id,c.name,c.first_name,c.last_name,c.email,c.phone,c.step,c.deposit_amount,
+        vr.marque,vr.modele,vr.couleur,vr.carburant,vr.premiere_immat,vr.budget,
+        vr.max_km,vr.description,vr.puissance_min,vr.boite
+       FROM clients c LEFT JOIN vehicle_requests vr ON vr.client_id=c.id WHERE c.access_token=?`,
       [token]
     );
 
@@ -277,7 +342,7 @@ export const getClientPublicData = async (req, res) => {
       vehicle.checklist = checks;
     }
 
-    res.json({ client, vehicles });
+    res.set('Cache-Control','no-store').json({ client, vehicles });
   } catch (error) {
     console.error("❌ Erreur getClientPublicData:", error);
     res.status(500).json({ message: "Erreur serveur" });

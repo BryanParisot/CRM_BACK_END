@@ -12,23 +12,24 @@ export const preselectVehicles = async (req, res) => {
       return res.status(400).json({ message: "Requête invalide" });
     }
 
+    const [[client]] = await pool.query("SELECT id, step FROM clients WHERE id = ? AND user_id = ?", [client_id, req.userId]);
+    if (!client) return res.status(404).json({ message: "Client introuvable." });
+    if (client.step !== 2) return res.status(400).json({ message: "Les liens peuvent être ajoutés uniquement à l’étape 2." });
+    if (!vehicles.length) return res.status(400).json({ message: "Ajoutez un lien." });
+    const proposals = [];
     for (const v of vehicles) {
+      let url;
+      try { url = new URL(v.link); } catch { return res.status(400).json({ message: "Lien invalide." }); }
+      if (!["http:", "https:"].includes(url.protocol)) return res.status(400).json({ message: "Le lien doit commencer par http:// ou https://." });
+      proposals.push({ ...v, link: url.href, title: String(v.title || url.hostname).trim().slice(0, 512) });
+    }
+    for (const v of proposals) {
       await pool.query(
-        `INSERT INTO selected_vehicles 
+        `INSERT INTO selected_vehicles
          (client_id, title, price, mileage, year, fuel, gearbox, power, image, link, selected_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'admin')`,
-        [
-          client_id,
-          v.title,
-          v.price,
-          v.mileage,
-          v.year,
-          v.fuel,
-          v.gearbox,
-          v.power,
-          v.image,
-          v.link,
-        ]
+        [client_id, v.title, v.price || null, v.mileage || null, v.year || null,
+         v.fuel || null, v.gearbox || null, v.power || null, v.image || null, v.link]
       );
     }
 

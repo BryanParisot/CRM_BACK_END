@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict';
+import pool from '../src/config/db.js';
+import {generateToken} from '../src/utils/generateToken.js';
+const origin=process.env.TEST_API_URL||'http://localhost:3000';
+let userId;const clients=[];
+try{
+  const [user]=await pool.query('INSERT INTO users (name,email,password) VALUES (?,?,?)',['Test livraison',`delivery-${Date.now()}@example.com`,'unused']);userId=user.insertId;
+  const token=`delivery-${Date.now()}-${userId}`;
+  const [created]=await pool.query('INSERT INTO clients (user_id,name,step,access_token) VALUES (?,?,?,?)',[userId,'Test livraison',5,token]);const clientId=created.insertId;clients.push(clientId);
+  const auth=generateToken(userId);const foreign=generateToken(0);
+  const request=(path,{method='GET',body,authorization=auth}={})=>fetch(`${origin}/api/clients${path}`,{method,headers:{...(authorization?{Authorization:`Bearer ${authorization}`} : {}),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
+  const admin=`/${clientId}/delivery`;const publicPath=`/public/${token}/delivery`;
+  const body={delivery_date:'2026-10-30',address:'Avricourt',revision:0};
+  assert.equal((await request(admin,{authorization:null})).status,401);assert.equal((await request(admin,{authorization:foreign})).status,404);
+  assert.equal((await request(publicPath,{authorization:null})).status,403);
+  assert.equal((await request('/public/invalid-delivery/delivery',{authorization:null})).status,404);
+  assert.equal((await request(admin,{method:'PATCH',body})).status,403);
+  const pending=await (await request(admin)).json();assert.equal(pending.delivery,null);assert.equal(pending.default_address,'Avricourt');
+  await pool.query('UPDATE clients SET step=6 WHERE id=?',[clientId]);
+  assert.equal((await request(admin,{method:'PATCH',body,authorization:null})).status,401);
+  assert.equal((await request(admin,{method:'PATCH',body,authorization:foreign})).status,404);
+  for(const date of ['2026-02-29','2026-02-30','2026-13-01','2026-01-32','2026-01-00','0999-01-01','2026-10-30T12:00:00Z','',null])assert.equal((await request(admin,{method:'PATCH',body:{...body,delivery_date:date}})).status,400);
+  for(const address of ['', '  ', 'x'.repeat(501),null,'Avri\u0000court'])assert.equal((await request(admin,{method:'PATCH',body:{...body,address}})).status,400);
+  assert.equal((await request(admin,{method:'PATCH',body:{...body,revision:-1}})).status,400);
+  const saved=await request(admin,{method:'PATCH',body});assert.equal(saved.status,200);
+  const info=await saved.json();assert.equal(info.delivery.delivery_date,'2026-10-30');assert.equal(info.delivery.address,'Avricourt');assert.equal(info.delivery.revision,1);
+  const publicRes=await request(publicPath,{authorization:null});assert.equal(publicRes.status,200);assert.equal(publicRes.headers.get('cache-control'),'no-store');
+  const publicInfo=await publicRes.json();assert.equal(publicInfo.delivery.delivery_date,'2026-10-30');assert.equal(publicInfo.client.user_id,undefined);assert.equal(publicInfo.client.access_token,undefined);
+  assert.equal((await request(admin,{method:'PATCH',body})).status,409);
+  const update=await request(admin,{method:'PATCH',body:{revision:1,delivery_date:'2028-02-29',address:'  Siège social\r\nAvricourt  '}});assert.equal(update.status,200);
+  const changed=await update.json();assert.equal(changed.delivery.address,'Siège social\nAvricourt');assert.equal(changed.delivery.delivery_date,'2028-02-29');assert.equal(changed.delivery.revision,2);
+  const otherToken=`other-${token}`;const [other]=await pool.query('INSERT INTO clients (user_id,name,step,access_token) VALUES (?,?,?,?)',[userId,'Autre livraison',6,otherToken]);clients.push(other.insertId);
+  assert.equal((await (await request(`/public/${otherToken}/delivery`,{authorization:null})).json()).delivery,null);
+  await pool.query('UPDATE clients SET step=5 WHERE id=?',[clientId]);assert.equal((await request(publicPath,{authorization:null})).status,403);
+  assert.equal((await (await request(admin)).json()).delivery.delivery_date,'2028-02-29');
+  console.log('Livraison OK : saisie manuelle, défaut Avricourt, date sans décalage, années bissextiles, modifications, versions, accès propriétaire et client limité à l’étape 6.');
+}finally{
+  for(const id of clients)await pool.query('DELETE FROM clients WHERE id=?',[id]);
+  if(userId)await pool.query('DELETE FROM users WHERE id=?',[userId]);
+  await pool.end();
+}

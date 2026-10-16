@@ -1,0 +1,21 @@
+name: crm
+
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: cartrust_crm
+      MYSQL_USER: cartrust
+      MYSQL_PASSWORD: cartrust_local
+      MYSQL_ROOT_PASSWORD: cartrust_root_local
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - crm_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+volumes:
+  crm_mysql:

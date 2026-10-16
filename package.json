@@ -5,6 +5,14 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
+    "test:delivery": "node scripts/check-delivery.mjs",
+    "test:portal": "node scripts/check-client-portal.mjs",
+    "test:settlement": "node scripts/check-settlement.mjs",
+    "test:identity": "node scripts/check-client-identity.mjs",
+    "test:youtrust": "node --test tests/youtrust.test.js",
+    "youtrust:check": "node scripts/check-youtrust.js",
+    "test:documents": "node scripts/check-client-documents.mjs",
+    "db:init": "node scripts/init-db.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/index.js",
     "dev": "nodemon src/index.js"
