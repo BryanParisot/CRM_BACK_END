@@ -1,91 +1,42 @@
-import pool from "../config/db.js";
-import {youtrustEnabled,youtrustService} from "../services/youtrust.service.js";
+import pool from '../config/db.js';
+import {youtrustEnabled,youtrustService} from '../services/youtrust.service.js';
+import {readVehicleChoice} from '../services/vehicleChoice.service.js';
 
-/**
- * GET /api/clients/:id/steps
- * → Récupère l'historique des transitions de step pour un client
- */
-export const getClientSteps = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const [steps] = await pool.query(
-      `SELECT id, from_step, to_step, changed_by, created_at
-       FROM client_steps
-       WHERE client_id = ? AND client_id IN (SELECT id FROM clients WHERE user_id = ?)
-       ORDER BY created_at ASC`,
-      [id,req.userId]
-    );
-
+export const getClientSteps=async(req,res)=>{
+  try{
+    const [steps]=await pool.query(`SELECT s.id,s.from_step,s.to_step,s.changed_by,s.created_at
+      FROM client_steps s JOIN clients c ON c.id=s.client_id
+      WHERE c.id=? AND c.user_id=? ORDER BY s.created_at ASC`,[req.params.id,req.userId]);
     res.json(steps);
-  } catch (error) {
-    console.error("❌ Erreur getClientSteps:", error);
-    res.status(500).json({ message: "Erreur serveur" });
-  }
+  }catch(error){res.status(500).json({message:'Impossible de charger les étapes.'});}
 };
 
-/**
- * POST /api/clients/:id/steps
- * → Ajoute une nouvelle transition d'étape (ex: 2 → 3)
- */
-export const addClientStep = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { to_step, changed_by = "admin" } = req.body;
-
-    // 🔍 Récupérer l'étape et le nom du client
-    const [[client]] = await pool.query(
-      "SELECT name, step FROM clients WHERE id = ? AND user_id = ?",
-      [id,req.userId]
-    );
-
-    if (!client) {
-      return res.status(404).json({ message: "Client introuvable" });
+export const addClientStep=async(req,res)=>{
+  const target=req.body?.to_step;
+  if(!Number.isInteger(target)||target<1||target>6)return res.status(400).json({message:'Étape invalide.'});
+  const db=await pool.getConnection();let client;
+  try{
+    await db.beginTransaction();
+    [[client]]=await db.query('SELECT id,name,step FROM clients WHERE id=? AND user_id=? FOR UPDATE',[req.params.id,req.userId]);
+    if(!client){await db.rollback();return res.status(404).json({message:'Client introuvable.'});}
+    if(Math.abs(target-client.step)>1){await db.rollback();return res.status(400).json({message:'Impossible de sauter plusieurs étapes.'});}
+    if(target===client.step){await db.commit();return res.json({from_step:client.step,to_step:target,signature_error:null,message:'Dossier déjà dans cette étape.'});}
+    if(client.step===4&&target===5){
+      const choice=await readVehicleChoice(client.id,db);
+      if(!choice||choice.needs_reconfirmation){
+        await db.rollback();return res.status(409).json({message:choice?'Les contrôles ont changé. Le client doit reconfirmer son choix définitif.':'Le client doit confirmer son véhicule définitif après consultation des contrôles.'});
+      }
     }
-
-    if(!Number.isInteger(to_step)||to_step<1||to_step>6)return res.status(400).json({message:'Étape invalide.'});
-    const from_step = client.step;
-
-    // Validation logique habituelle
-    if (Math.abs(to_step - from_step) > 1) {
-      return res.status(400).json({
-        message: "Impossible de sauter plusieurs étapes.",
-      });
+    if(target<4){
+      const [removed]=await db.query('DELETE FROM client_vehicle_choices WHERE client_id=?',[client.id]);
+      if(removed.affectedRows)await db.query('INSERT INTO notifications (client_id,type,message) VALUES (?,?,?)',[client.id,'final_choice_reset',`Le choix définitif de ${client.name} sera à confirmer après le retour aux contrôles.`]);
     }
-
-    // Mise à jour de l'étape
-    await pool.query(
-      "UPDATE clients SET step = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-      [to_step, id]
-    );
-
-    // Enregistrement historique
-    await pool.query(
-      `INSERT INTO client_steps (client_id, from_step, to_step, changed_by)
-       VALUES (?, ?, ?, ?)`,
-      [id, from_step, to_step, changed_by]
-    );
-
-    // 🔔 ⭐ ENREGISTRER UNE NOTIFICATION AVEC LE NOM DU CLIENT ⭐
-    const message = `${client.name} est passé à l’étape ${to_step}.`;
-
-    await pool.query(
-      `INSERT INTO notifications (client_id, message, type, is_read)
-       VALUES (?, ?,?, FALSE)`,
-      [id, message, "step_change"]
-    );
-
-    let signature_error=null;
-    if(to_step===3&&youtrustEnabled()){
-      try{await youtrustService.ensure(id);}catch(error){signature_error=error.message;}
-    }
-    res.json({
-      signature_error,
-      message: `Étape ${from_step} → ${to_step} validée`,
-      from_step,
-      to_step,
-    });
-  } catch (error) {
-    console.error("❌ Erreur addClientStep:", error);
-    res.status(500).json({ message: "Erreur serveur" });
-  }
+    await db.query('UPDATE clients SET step=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',[target,client.id]);
+    await db.query('INSERT INTO client_steps (client_id,from_step,to_step,changed_by) VALUES (?,?,?,?)',[client.id,client.step,target,String(req.userId)]);
+    await db.query('INSERT INTO notifications (client_id,message,type) VALUES (?,?,?)',[client.id,`${client.name} est passé à l’étape ${target}.`,'step_change']);
+    await db.commit();
+  }catch(error){await db.rollback();console.error('Étapes :',error.message);return res.status(500).json({message:'Impossible de changer l’étape.'});}finally{db.release();}
+  let signature_error=null;
+  if(target===3&&youtrustEnabled())try{await youtrustService.ensure(client.id);}catch(error){signature_error=error.message;}
+  res.json({signature_error,message:`Étape ${client.step} → ${target} validée`,from_step:client.step,to_step:target});
 };

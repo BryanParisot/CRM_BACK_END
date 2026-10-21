@@ -57,6 +57,13 @@ try {
   for (const sql of tables) await pool.query(sql);
   const [[checkStatus]]=await pool.query("SHOW COLUMNS FROM vehicle_checks LIKE 'status'");
   if(!checkStatus.Type.includes("'issue'"))await pool.query("ALTER TABLE vehicle_checks MODIFY COLUMN status ENUM('pending','validated','rejected','not_applicable','issue') DEFAULT 'pending'");
+  await pool.query(`CREATE TABLE IF NOT EXISTS client_vehicle_choices (
+    client_id INT PRIMARY KEY, vehicle_id INT NOT NULL,
+    checklist_version CHAR(64) NOT NULL, revision INT NOT NULL DEFAULT 1,
+    chosen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+    FOREIGN KEY (vehicle_id) REFERENCES selected_vehicles(id) ON DELETE CASCADE
+  )`);
   for (const [name, definition] of [['first_name', 'VARCHAR(100) NULL'], ['last_name', 'VARCHAR(150) NULL']]) {
     const [columns] = await pool.query('SHOW COLUMNS FROM clients LIKE ?', [name]);
     if (!columns.length) await pool.query(`ALTER TABLE clients ADD COLUMN ${name} ${definition}`);

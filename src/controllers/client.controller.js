@@ -1,6 +1,7 @@
 import pool from "../config/db.js";
 import crypto from "crypto";
 import {clientIdentity} from "../utils/clientIdentity.js";
+import {checklistVersion,checklistReviewed,readVehicleChoice} from '../services/vehicleChoice.service.js';
 
 export const updateDepositAmount = async (req, res) => {
   const amount = req.body.deposit_amount;
@@ -30,7 +31,7 @@ export const saveVehicleDecision = async (req, res) => {
     connection = await pool.getConnection();
     await connection.beginTransaction();
     const [[vehicle]] = await connection.query(
-      `SELECT v.id, v.client_id, v.selected_by, v.title, c.name
+      `SELECT v.id, v.client_id, v.selected_by, v.title, c.name, c.step
        FROM selected_vehicles v JOIN clients c ON c.id = v.client_id
        WHERE c.access_token = ? AND v.id = ? FOR UPDATE`,
       [req.params.token, req.params.vehicleId]
@@ -40,6 +41,7 @@ export const saveVehicleDecision = async (req, res) => {
       return res.status(404).json({ message: "Proposition introuvable." });
     }
     const selectedBy = { accepted: "client", rejected: "rejected", pending: "admin" }[decision];
+    if(vehicle.step!==2){await connection.rollback();return res.status(409).json({message:'Les propositions se choisissent à l’étape 2. Le choix définitif se fait après les contrôles.'});}
     if (vehicle.selected_by !== selectedBy) {
       await connection.query("UPDATE selected_vehicles SET selected_by = ? WHERE id = ?", [selectedBy, vehicle.id]);
       const label = { accepted: "a retenu", rejected: "a refusé", pending: "a remis en attente" }[decision];
@@ -103,6 +105,7 @@ export const getClients = async (req, res) => {
  * Mise à jour complète du client et de sa demande de véhicule
  */
 export const updateClient = async (req, res) => {
+  if(req.body.step!==undefined||req.body.progress!==undefined)return res.status(400).json({message:'Utilisez les boutons de changement d’étape du dossier.'});
   try {
     const { id } = req.params;
     const userId = req.userId; // ID de l'utilisateur authentifié
@@ -340,9 +343,11 @@ export const getClientPublicData = async (req, res) => {
         [vehicle.id]
       );
       vehicle.checklist = checks;
+      vehicle.checklist_version=checklistVersion(checks);
+      vehicle.can_choose_final=checklistReviewed(checks);
     }
 
-    res.set('Cache-Control','no-store').json({ client, vehicles });
+    res.set('Cache-Control','no-store').json({ client, vehicles,final_choice:await readVehicleChoice(client.id) });
   } catch (error) {
     console.error("❌ Erreur getClientPublicData:", error);
     res.status(500).json({ message: "Erreur serveur" });
@@ -369,7 +374,7 @@ export const saveClientSelectionFromLink = async (req, res) => {
 
     // Trouver le client via le token
     const [[client]] = await pool.query(
-      "SELECT id, name FROM clients WHERE access_token = ?",
+      "SELECT id, name, step FROM clients WHERE access_token = ?",
       [token]
     );
 
@@ -378,6 +383,7 @@ export const saveClientSelectionFromLink = async (req, res) => {
     }
 
     const clientId = client.id;
+    if(client.step!==2)return res.status(409).json({message:'Les propositions se choisissent uniquement à l’étape 2.'});
 
     // Reset anciennes sélections du client
     await pool.query(

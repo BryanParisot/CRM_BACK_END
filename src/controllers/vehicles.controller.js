@@ -1,4 +1,5 @@
 import pool from "../config/db.js";
+import {readVehicleChoice} from '../services/vehicleChoice.service.js';
 
 /**
  * ADMIN — Ajout de véhicules présélectionnés pour un client
@@ -48,6 +49,8 @@ export const deletePreselectedVehicle = async (req, res) => {
   const { id } = req.params;
 
   try {
+    const [[choice]]=await pool.query('SELECT client_id FROM client_vehicle_choices WHERE vehicle_id=?',[id]);
+    if(choice)return res.status(409).json({message:'Ce véhicule a été choisi définitivement par le client. Il ne peut pas être supprimé.'});
     const [result] = await pool.query(
       "DELETE FROM selected_vehicles WHERE id = ?",
       [id]
@@ -80,7 +83,11 @@ export const getPreselectedVehicles = async (req, res) => {
     );
 
     // Récupérer les checklists pour chaque véhicule
+    const choice=await readVehicleChoice(id);
     for (const vehicle of rows) {
+      vehicle.is_final_choice=vehicle.id===choice?.vehicle_id;
+      vehicle.final_choice_needs_reconfirmation=vehicle.is_final_choice&&Boolean(choice?.needs_reconfirmation);
+      vehicle.final_chosen_at=vehicle.is_final_choice?choice.chosen_at:null;
       const [checks] = await pool.query(
         "SELECT * FROM vehicle_checks WHERE selected_vehicle_id = ?",
         [vehicle.id]

@@ -2,6 +2,15 @@
 
 Ce dépôt contient l’API Express/MySQL. L’interface React/Vite est disponible dans [CRM_TRUST_FRONT](https://github.com/BryanParisot/CRM_TRUST_FRONT). Cloner les deux dépôts côte à côte. Node.js et Docker Desktop sont nécessaires.
 
+## Organisation de l’API
+
+- `src/routes/` déclare les URL, les méthodes HTTP, l’authentification et les parseurs de corps de requête.
+- `src/controllers/` contient les handlers : validation des requêtes, accès aux données, transactions et réponses HTTP.
+- `src/services/` regroupe les traitements métier réutilisables, notamment les calculs de solde et l’intégration Youtrust.
+- `src/middleware/` contient l’authentification et les réponses d’erreur communes aux modules.
+
+Par exemple, `settlement.routes.js` associe les routes à `settlement.controller.js`, qui utilise `settlement.service.js` pour calculer le solde. Les modules documents, livraison, choix définitif du véhicule et Youtrust suivent la même séparation routes/contrôleurs. Le routeur webhook Youtrust reste monté avant `express.json()` pour vérifier la signature du corps brut. Express 5 transmet les erreurs des handlers asynchrones aux middlewares d’erreur.
+
 ## Premier lancement
 
 1. Démarrer Docker Desktop, puis dans `CRM_BACK_END` : `docker compose up -d --wait`.
@@ -42,6 +51,10 @@ Pour vérifier la configuration Youtrust sans créer d’invitation, lancer `npm
 À l’étape CRM 3, le lien client ouvre successivement : signature des CGV, justificatifs (CNI recto/verso, permis et domicile), puis acompte. Les étapes suivantes sont verrouillées jusqu’à confirmation de la signature (automatique via Youtrust, ou administrative en mode manuel) et dépôt des quatre fichiers. Les justificatifs sont privés et téléchargeables uniquement par l’administrateur propriétaire. La déclaration de virement ne confirme pas le paiement et ne libère pas la facture.
 
 À l’étape CRM 4, le même lien client ouvre le suivi des contrôles. Seuls les véhicules retenus sont affichés, avec leur nom, leur lien et les points de contrôle enregistrés par l’administrateur. Les statuts se rafraîchissent toutes les cinq secondes. Une checklist vide reste « À préparer » ; les nouvelles checklists standard commencent avec tous les points en attente. Le client consulte les contrôles sans les modifier et garde accès à ses CGV et sa facture. Une page de paiement déjà ouverte passe automatiquement aux contrôles lorsque le dossier avance à l’étape 4.
+
+À cette étape, le client compare les checklists puis confirme un seul véhicule définitif parmi ses propositions retenues. Le choix devient disponible lorsque tous les contrôles du véhicule sont renseignés (aucun point en attente). Une confirmation explicite est demandée, avec rappel des points à corriger ou non validés. Le choix est conservé séparément des propositions, apparaît côté administrateur et génère une notification. Il est verrouillé dès confirmation : le client peut consulter les autres véhicules, mais ne peut plus en choisir un autre. Les véhicules non retenus sont grisés côté administrateur. Si les contrôles changent, le client doit les consulter à nouveau et reconfirmer avant le passage au solde. Une sauvegarde identique ne remet pas le choix en cause. Un retour à une étape antérieure aux contrôles efface le choix définitif, qui sera à refaire.
+
+La migration `npm run db:init` ajoute `client_vehicle_choices` sans effacer les dossiers. Vérifications du choix, des accès par lien, des versions et du passage d’étape : `npm run test:vehicle-choice` (API démarrée ; dossiers temporaires nettoyés ; aucune invitation Youtrust créée).
 
 À l’étape CRM 5, « Solde & documents » permet de renseigner le prix total de la prestation Cartrust. Le prix du véhicule n’entre pas dans ce récapitulatif. Le montant de l’acompte effectivement confirmé à l’étape 3 est conservé dans `deposit_paid_amount`, puis déduit côté serveur pour calculer le solde, en centimes. Un acompte non confirmé ne se déduit pas ; sa révocation recalcule le solde. Les montants ne peuvent plus être modifiés après confirmation du paiement final sans retirer cette confirmation.
 
