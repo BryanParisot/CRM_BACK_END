@@ -32,6 +32,8 @@ La base est conservée dans le volume Docker `crm_crm_mysql` (projet Compose `cr
 
 ## État de la reprise
 
+Le drapeau discret des cartes du pipeline et de la liste clients permet d’activer ou de retirer la priorité d’un dossier. Le marqueur est conservé dans `clients.is_priority`, modifiable uniquement par son propriétaire et absent des données du portail client. `npm run db:init` ajoute le champ aux bases existantes. Vérifications : `npm run test:priority` (API démarrée ; dossiers temporaires nettoyés).
+
 À l’étape 1, « Ajouter un autre véhicule » permet de conserver plusieurs marques/modèles envisagés dans un dossier. Le modèle est facultatif ; le budget et les critères restent communs. Les possibilités supplémentaires sont modifiables et supprimables à cette étape, et visibles dans la fiche, le portail client, la liste et le pipeline. Elles ne constituent pas des annonces : les liens restent ajoutés à l’étape 2. `npm run db:init` ajoute `additional_vehicle_preferences` sans effacer les données existantes. Vérifications : `npm run test:vehicle-preferences` (API démarrée ; dossiers temporaires nettoyés).
 
 « Ajouter les critères » ouvre directement dans cette recherche un formulaire facultatif pour le budget, le kilométrage, l’année, la puissance, le carburant, la boîte et la couleur. Une sauvegarde partielle fonctionne aussi pour un ancien dossier sans ligne `vehicle_requests` et ne demande pas les coordonnées du client. Les possibilités de véhicules et les autres informations du dossier sont conservées.

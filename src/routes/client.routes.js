@@ -11,6 +11,7 @@ import {
   addVehicleChecks,
   saveVehicleDecision,
   updateDepositAmount,
+  updateClientPriority,
 } from "../controllers/client.controller.js";
 import { verifyToken } from "../middleware/auth.middleware.js";
 
@@ -26,6 +27,7 @@ router.post("/", verifyToken, createClient);
 router.get("/:id", getClientById);
 router.patch("/:id", verifyToken, updateClient);
 router.patch("/:id/deposit", verifyToken, updateDepositAmount);
+router.patch("/:id/priority", verifyToken, updateClientPriority);
 router.delete("/:id", verifyToken, deleteClient);
 
 // Route pour ajouter/modifier la checklist d'un véhicule (Admin)

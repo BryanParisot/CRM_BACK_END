@@ -4,6 +4,19 @@ import {clientIdentity} from "../utils/clientIdentity.js";
 import {checklistVersion,checklistReviewed,readVehicleChoice} from '../services/vehicleChoice.service.js';
 import {attachAdditionalVehicles} from '../services/vehiclePreferences.service.js';
 
+export const updateClientPriority = async (req, res) => {
+  const priority = req.body?.is_priority;
+  if (typeof priority !== 'boolean') return res.status(400).json({message: 'Priorité invalide.'});
+  try {
+    const [result] = await pool.query('UPDATE clients SET is_priority=? WHERE id=? AND user_id=?', [priority, req.params.id, req.userId]);
+    if (!result.affectedRows) return res.status(404).json({message: 'Client introuvable.'});
+    res.set('Cache-Control', 'no-store').json({is_priority: priority});
+  } catch (error) {
+    console.error('Priorité client :', error.message);
+    res.status(500).json({message: 'Impossible de modifier la priorité.'});
+  }
+};
+
 export const updateDepositAmount = async (req, res) => {
   const amount = req.body.deposit_amount;
   if (typeof amount !== 'string' || !/^\d{1,10}(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) {

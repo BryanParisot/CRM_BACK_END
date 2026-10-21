@@ -5,6 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
+    "test:priority": "node scripts/check-client-priority.mjs",
     "test:vehicle-preferences": "node scripts/check-vehicle-preferences.mjs",
     "test:vehicle-choice": "node scripts/check-vehicle-choice.mjs",
     "test:delivery": "node scripts/check-delivery.mjs",

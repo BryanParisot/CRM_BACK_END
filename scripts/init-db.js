@@ -55,6 +55,8 @@ const tables = [
 
 try {
   for (const sql of tables) await pool.query(sql);
+  const [priorityColumns] = await pool.query("SHOW COLUMNS FROM clients LIKE 'is_priority'");
+  if (!priorityColumns.length) await pool.query('ALTER TABLE clients ADD COLUMN is_priority BOOLEAN NOT NULL DEFAULT FALSE');
   await pool.query(`CREATE TABLE IF NOT EXISTS additional_vehicle_preferences (
     id INT AUTO_INCREMENT PRIMARY KEY, client_id INT NOT NULL,
     marque VARCHAR(255) NOT NULL, modele VARCHAR(255) NOT NULL DEFAULT '',
