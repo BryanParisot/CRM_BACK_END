@@ -55,6 +55,11 @@ const tables = [
 
 try {
   for (const sql of tables) await pool.query(sql);
+  await pool.query(`CREATE TABLE IF NOT EXISTS additional_vehicle_preferences (
+    id INT AUTO_INCREMENT PRIMARY KEY, client_id INT NOT NULL,
+    marque VARCHAR(255) NOT NULL, modele VARCHAR(255) NOT NULL DEFAULT '',
+    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
+  )`);
   const [[checkStatus]]=await pool.query("SHOW COLUMNS FROM vehicle_checks LIKE 'status'");
   if(!checkStatus.Type.includes("'issue'"))await pool.query("ALTER TABLE vehicle_checks MODIFY COLUMN status ENUM('pending','validated','rejected','not_applicable','issue') DEFAULT 'pending'");
   await pool.query(`CREATE TABLE IF NOT EXISTS client_vehicle_choices (

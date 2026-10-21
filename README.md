@@ -32,6 +32,10 @@ La base est conservée dans le volume Docker `crm_crm_mysql` (projet Compose `cr
 
 ## État de la reprise
 
+À l’étape 1, « Ajouter un autre véhicule » permet de conserver plusieurs marques/modèles envisagés dans un dossier. Le modèle est facultatif ; le budget et les critères restent communs. Les possibilités supplémentaires sont modifiables et supprimables à cette étape, et visibles dans la fiche, le portail client, la liste et le pipeline. Elles ne constituent pas des annonces : les liens restent ajoutés à l’étape 2. `npm run db:init` ajoute `additional_vehicle_preferences` sans effacer les données existantes. Vérifications : `npm run test:vehicle-preferences` (API démarrée ; dossiers temporaires nettoyés).
+
+« Ajouter les critères » ouvre directement dans cette recherche un formulaire facultatif pour le budget, le kilométrage, l’année, la puissance, le carburant, la boîte et la couleur. Une sauvegarde partielle fonctionne aussi pour un ancien dossier sans ligne `vehicle_requests` et ne demande pas les coordonnées du client. Les possibilités de véhicules et les autres informations du dossier sont conservées.
+
 L’espace minimal `/client-link/:token/documents` permet de télécharger les CGV signées et la facture. Il est accessible depuis le portail client. À l’étape 3, Youtrust peut générer automatiquement la demande depuis le modèle configuré et rapatrier le PDF signé. Le mode manuel reste disponible si l’intégration est désactivée. La facture PDF est importée par l’administrateur. La facture est bloquée côté serveur jusqu’à confirmation de réception du paiement ; retirer la confirmation bloque à nouveau le téléchargement. Les PDF sont stockés dans MySQL et limités à 10 Mo chacun.
 
 Le modèle commun ne constitue pas une copie signée. La génération des factures et leur envoi par email ne sont pas encore branchés. Vérification des règles d’accès et de paiement : avec l’API démarrée, lancer `npm run test:documents` dans le backend (les données temporaires sont nettoyées).

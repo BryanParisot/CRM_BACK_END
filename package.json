@@ -5,6 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
+    "test:vehicle-preferences": "node scripts/check-vehicle-preferences.mjs",
     "test:vehicle-choice": "node scripts/check-vehicle-choice.mjs",
     "test:delivery": "node scripts/check-delivery.mjs",
     "test:portal": "node scripts/check-client-portal.mjs",

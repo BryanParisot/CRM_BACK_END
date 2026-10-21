@@ -11,6 +11,7 @@ import clientDocumentsRoutes from './routes/clientDocuments.routes.js';
 import settlementRoutes from './routes/settlement.routes.js';
 import deliveryRoutes from './routes/delivery.routes.js';
 import vehicleChoiceRoutes from './routes/vehicleChoice.routes.js';
+import vehiclePreferencesRoutes from './routes/vehiclePreferences.routes.js';
 import {youtrustRouter,youtrustWebhookRouter} from './routes/youtrust.routes.js';
 import {startYoutrustSync} from './services/youtrust.service.js';
 
@@ -42,6 +43,7 @@ app.use("/api/clients", youtrustRouter);
 app.use("/api/clients", settlementRoutes);
 app.use("/api/clients", deliveryRoutes);
 app.use('/api/clients',vehicleChoiceRoutes);
+app.use('/api/clients',vehiclePreferencesRoutes);
 app.use("/api/clients", clientDocumentsRoutes);
 app.use("/api/clients", clientRoutes);
 app.use("/api/clients", clientStepsRoutes);

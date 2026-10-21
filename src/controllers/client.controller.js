@@ -2,6 +2,7 @@ import pool from "../config/db.js";
 import crypto from "crypto";
 import {clientIdentity} from "../utils/clientIdentity.js";
 import {checklistVersion,checklistReviewed,readVehicleChoice} from '../services/vehicleChoice.service.js';
+import {attachAdditionalVehicles} from '../services/vehiclePreferences.service.js';
 
 export const updateDepositAmount = async (req, res) => {
   const amount = req.body.deposit_amount;
@@ -75,6 +76,7 @@ export const getClientById = async (req, res) => {
       return res.status(404).json({ message: "Client non trouvé" });
     }
 
+    await attachAdditionalVehicles(rows);
     res.json(rows[0]);
   } catch (error) {
     console.error("❌ Erreur récupération client:", error);
@@ -92,6 +94,7 @@ export const getClients = async (req, res) => {
        WHERE c.user_id = ?`,
       [userId]
     );
+    await attachAdditionalVehicles(clients);
     res.json(clients);
   } catch (error) {
     console.error("❌ Erreur récupération clients:", error);
@@ -154,8 +157,8 @@ export const updateClient = async (req, res) => {
     } else if (name !== undefined) {
       return res.status(400).json({message:'Utilisez les champs Prénom et Nom séparés.'});
     }
-    if (email !== undefined) clientFields.email = email;
-    if (phone !== undefined) clientFields.phone = phone;
+    if (email !== undefined) clientFields.email = email || null;
+    if (phone !== undefined) clientFields.phone = phone || null;
     if (date_of_birth !== undefined) clientFields.date_of_birth = date_of_birth;
     if (step !== undefined) clientFields.step = step;
     if (progress !== undefined) clientFields.progress = progress;
@@ -189,11 +192,13 @@ export const updateClient = async (req, res) => {
     if (Object.keys(vehicleFields).length > 0) {
       const vehicleKeys = Object.keys(vehicleFields);
       const vehicleValues = Object.values(vehicleFields);
-      const vehicleSetClause = vehicleKeys.map(k => `${k} = ?`).join(", ");
+      const vehicleSetClause = vehicleKeys.map(k => `${k} = VALUES(${k})`).join(", ");
 
       await pool.query(
-        `UPDATE vehicle_requests SET ${vehicleSetClause} WHERE client_id = ?`,
-        [...vehicleValues, id]
+        `INSERT INTO vehicle_requests (client_id, ${vehicleKeys.join(', ')})
+         VALUES (?, ${vehicleKeys.map(() => '?').join(', ')})
+         ON DUPLICATE KEY UPDATE ${vehicleSetClause}`,
+        [id, ...vehicleValues]
       );
     }
 
@@ -235,7 +240,7 @@ export const createClient = async (req, res) => {
     const [clientResult] = await pool.query(
       `INSERT INTO clients (user_id, name, first_name, last_name, email, phone, date_of_birth, step)
        VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
-      [userId, identity.name, identity.first_name, identity.last_name, email, phone, date_of_birth || null]
+      [userId, identity.name, identity.first_name, identity.last_name, email || null, phone || null, date_of_birth || null]
     );
 
     const clientId = clientResult.insertId;
@@ -327,6 +332,8 @@ export const getClientPublicData = async (req, res) => {
     if (!client) {
       return res.status(404).json({ message: "Lien invalide ou expiré." });
     }
+
+    await attachAdditionalVehicles([client]);
 
     // Récupérer les véhicules présélectionnés pour ce client
     const [vehicles] = await pool.query(
